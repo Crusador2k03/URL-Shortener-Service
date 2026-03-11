@@ -10,7 +10,6 @@ import {
   CartesianGrid,
 } from "recharts";
 
-
 const API_BASE = import.meta.env.VITE_API_BASE;
 
 type Visit = {
@@ -18,7 +17,8 @@ type Visit = {
 };
 
 type UrlAnalyticsData = {
-  shortUrl: string;
+  shortId: string;
+  nanoid: string;
   originalUrl: string;
   totalClicks: number;
   visitHistory: Visit[];
@@ -33,10 +33,17 @@ export default function UrlAnalytics() {
   const [range, setRange] = useState<Range>("7d");
 
   useEffect(() => {
-    fetch(`${API_BASE}/url/analytics/${shortId}`)
-      .then((res) => res.json())
-      .then(setData);
-  }, [shortId]);
+    fetch(`${API_BASE}/url/analytics/${shortId}`, {
+    })
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error("Failed to fetch URL analytics");
+        }
+        return res.json();
+      })
+      .then(setData)
+      .catch(() => navigate("/analytics"));
+  }, [shortId, navigate]);
 
   if (!data) {
     return <p className="p-6 text-center">Loading...</p>;
@@ -70,41 +77,49 @@ export default function UrlAnalytics() {
     }));
 
   return (
-    <div className="min-h-screen bg-gray-100 flex justify-center p-6">
-      <div className="w-full max-w-4xl">
+    <div
+      className="min-h-screen text-[#c9d1d9] flex justify-center p-6
+        bg-[#0d1117]
+        bg-[linear-gradient(to_right,rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.05)_1px,transparent_1px)]
+        bg-[size:12px_12px]"
+    >
+      <div className="w-full max-w-4xl relative">
+
         <button
           onClick={() => navigate("/analytics")}
-          className="text-sm text-gray-500 underline mb-4"
+          className="text-sm text-[#8b949e] hover:text-white underline mb-4"
         >
           ← Back to Analytics
         </button>
 
         {/* URL Info */}
-        <div className="bg-white rounded-xl shadow p-6 mb-6">
-          <h1 className="text-2xl font-bold mb-1">
-            Analytics for short ID: {data.shortUrl}
+        <div className="bg-[#161b22] border border-[#30363d] rounded-lg shadow-lg p-6 mb-6">
+          <h1 className="text-2xl font-semibold text-white mb-1">
+            Analytics for short ID: {data.nanoid}
           </h1>
-          <p className="text-gray-600 break-all">
+
+          <p className="text-[#8b949e] break-all">
             Original URL: {data.originalUrl}
           </p>
         </div>
 
         {/* Click counter */}
-        <div className="bg-blue-50 border border-blue-100 rounded-xl p-5 mb-6">
-          <p className="text-sm text-blue-600">Total Clicks</p>
-          <p className="text-3xl font-bold text-blue-700">
+        <div className="bg-[#161b22] border border-[#30363d] rounded-lg shadow-lg p-6 mb-6 text-center">
+          <p className="text-sm text-[#8b949e]">Total Clicks</p>
+          <p className="text-3xl font-semibold text-white">
             {data.totalClicks}
           </p>
         </div>
 
-        <div className="flex gap-2 mb-4">
+        {/* Range buttons */}
+        <div className="flex gap-2 mb-6">
           {["24h", "7d", "30d"].map((r) => (
             <button
               key={r}
-              onClick={() => setRange(r as any)}
-              className={`px-4 py-1 rounded border text-sm ${range === r
-                ? "bg-blue-600 text-white border-blue-600"
-                : "bg-white text-gray-600 hover:bg-gray-100"
+              onClick={() => setRange(r as Range)}
+              className={`px-4 py-1 rounded-md border text-sm transition ${range === r
+                  ? "bg-[#58a6ff] text-white border-[#58a6ff]"
+                  : "bg-[#161b22] text-[#8b949e] border-[#30363d] hover:bg-[#0d1117]"
                 }`}
             >
               {r}
@@ -112,50 +127,56 @@ export default function UrlAnalytics() {
           ))}
         </div>
 
-
-
         {/* Chart */}
-        <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">
+        <div className="bg-[#161b22] border border-[#30363d] rounded-lg shadow-lg p-6">
+          <h2 className="text-lg font-semibold text-white mb-4">
             Click Timeline
           </h2>
 
-          <div className="transition-opacity duration-300 ease-in-out" key={range}>
+          <div
+            className="transition-opacity duration-300 ease-in-out"
+            key={range}
+          >
             <ResponsiveContainer width="100%" height={320}>
               <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+
+                <CartesianGrid strokeDasharray="3 3" stroke="#30363d" />
 
                 <XAxis
                   dataKey="time"
+                  stroke="#8b949e"
                   tick={{ fontSize: 11 }}
                   interval="preserveStartEnd"
                   minTickGap={20}
-                  allowDataOverflow
                 />
 
                 <YAxis
                   allowDecimals={false}
                   domain={[0, "dataMax + 1"]}
+                  stroke="#8b949e"
                   tick={{ fontSize: 11 }}
                   label={{
                     value: "Clicks",
                     angle: -90,
                     position: "insideLeft",
+                    fill: "#8b949e"
                   }}
                 />
 
-
                 <Tooltip
-                  animationDuration={200}
+                  contentStyle={{
+                    backgroundColor: "#161b22",
+                    border: "1px solid #30363d",
+                    color: "#c9d1d9"
+                  }}
                   formatter={(value) => [`${value}`, "Clicks"]}
                   labelFormatter={(label) => `Time: ${label}`}
                 />
 
-
                 <Line
                   type="monotone"
                   dataKey="clicks"
-                  stroke="#2563eb"
+                  stroke="#58a6ff"
                   strokeWidth={3}
                   dot={{ r: 3 }}
                   activeDot={{ r: 6, strokeWidth: 2 }}
@@ -168,6 +189,7 @@ export default function UrlAnalytics() {
             </ResponsiveContainer>
           </div>
         </div>
+
       </div>
     </div>
   );

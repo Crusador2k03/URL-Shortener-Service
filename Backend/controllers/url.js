@@ -2,60 +2,111 @@ const { nanoid } = require("nanoid");
 const URL = require("../models/url");
 const redisClient = require("../redis");
 
+const RESERVED = ["api", "login", "signup", "admin"];
+
 async function handleCreateShortURL(req, res) {
-  const { url } = req.body;
-  console.log("BODY:", req.body);
+  const { url, customAlias } = req.body;
 
   if (!url) {
     return res.status(400).json({ error: "URL is required" });
   }
 
-  const shortId = nanoid(8);
+  let normalizedAlias;
 
-  await URL.create({
-    shortUrl: shortId,
-    originalUrl: url,
-    visitHistory: [],
-  });
+  if (customAlias) {
+    normalizedAlias = customAlias
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9-_]/g, "");
 
-  return res.status(201).json({ id: shortId });
+    if (!normalizedAlias) {
+      return res.status(400).json({ error: "Invalid custom alias" });
+    }
+
+    if (RESERVED.includes(normalizedAlias)) {
+      return res.status(400).json({ error: "Alias is reserved" });
+    }
+
+    const exists =
+      (await redisClient.get(normalizedAlias)) ||
+      (await URL.findOne({ shortId: normalizedAlias }));
+
+    if (exists) {
+      return res.status(409).json({ error: "Alias already taken" });
+    }
+  }
+
+  // ✅ ALWAYS generate canonical nanoid
+  const generatedNanoId = nanoid(8);
+
+  // ✅ Alias is just a cover
+  const shortId = normalizedAlias || generatedNanoId;
+
+  try {
+    await URL.create({
+      shortId,
+      nanoid: generatedNanoId,
+      originalUrl: url,
+      visitHistory: [],
+    });
+
+    return res.status(201).json({
+      shortUrl: `${process.env.BASE_URL}/${shortId}`,
+    });
+  } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({
+        error: "Alias already taken",
+      });
+    }
+
+    console.error(err);
+    return res.status(500).json({
+      error: "Internal server error",
+    });
+  }
 }
 
-async function handleRedirect(req, res) {             
-  const { shortId } = req.params;
+async function handleRedirect(req, res) {
+  const alias = req.params.shortId;
 
-  URL.updateOne(
-    { shortUrl: shortId },
-    { $push: { visitHistory: { timestamp: Date.now() } } }
-  ).catch(console.error);
+  const entry = await URL.findOne({ shortId: alias });
+  if (!entry) {
+    return res.status(404).send("Not found");
+  }
 
-  const cachedUrl = await redisClient.get(shortId);
+  const canonicalId = entry.nanoid;
+
+  const cachedUrl = await redisClient.get(canonicalId);
   if (cachedUrl) {
-    console.log("Redis Cache hit:", shortId);
+    URL.updateOne(
+      { nanoid: canonicalId },
+      { $push: { visitHistory: { timestamp: Date.now() } } }
+    ).catch(console.error);
+
     return res.redirect(cachedUrl);
   }
 
-  console.log("MongoDB hit:", shortId);
-  const entry = await URL.findOne({ shortUrl: shortId });
-  if (!entry) {
-    return res.status(404).json({ error: "Short URL not found" });
-  }
+  await redisClient.set(canonicalId, entry.originalUrl, {
+    EX: 60 * 60 * 24,
+  });
 
-await redisClient.set(shortId, entry.originalUrl, {EX: 60 * 60 * 24}); // Cache for 1 day
-
-
-
-  entry.visitHistory.push({ timestamp: Date.now() });
-  await entry.save();
-
+  await URL.updateOne(
+    { nanoid: canonicalId },
+    { $push: { visitHistory: { timestamp: Date.now() } } }
+  );
   return res.redirect(entry.originalUrl);
 }
+
+
+
 
 async function handleGetAllAnalytics(req, res) {
   const urls = await URL.find({});
 
   const analytics = urls.map((url) => ({
-    shortUrl: url.shortUrl,
+    shortId: url.shortId,
+    nanoid: url.nanoid,
     originalUrl: url.originalUrl,
     totalClicks: url.visitHistory.length,
     visitHistory: url.visitHistory,
@@ -67,20 +118,19 @@ async function handleGetAllAnalytics(req, res) {
 async function handleGetUrlAnalytics(req, res) {
   const { shortId } = req.params;
 
-  const url = await URL.findOne({ shortUrl: shortId });
+  const url = await URL.findOne({ shortId});
   if (!url) {
     return res.status(404).json({ error: "URL not found" });
   }
 
   return res.json({
-    shortUrl: url.shortUrl,
+    shortId: url.shortId,
+    nanoid: url.nanoid,
     originalUrl: url.originalUrl,
     totalClicks: url.visitHistory.length,
     visitHistory: url.visitHistory,
   });
 }
-
-
 
 module.exports = {
   handleCreateShortURL,

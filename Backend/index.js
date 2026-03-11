@@ -4,6 +4,7 @@ const { connectDB } = require("./connect");
 const cors = require("cors");
 const urlRoutes = require("./routes/url");
 const redisClient = require("./redis");
+const { handleRedirect } = require("./controllers/url");
 
 const app = express();
 const PORT =  process.env.PORT || 8001;
@@ -29,7 +30,7 @@ connectDB(process.env.MONGO_URL)
 
     app.use("/url", urlRoutes); // All routes prefixed with '/url'.
                                               // Why? --> Logical grouping.
-
+    app.get("/:shortId", handleRedirect); // Catch-all for short URL redirects.
     app.listen(PORT, () => {
       console.log(`Server running on http://localhost:${PORT}`);
     });

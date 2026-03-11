@@ -1,0 +1,41 @@
+#! backend-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: backend
+    namespace: short-url
+    labels:
+        com.docker.compose.project: short-url
+        com.docker.compose.service: backend
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: short-url
+            com.docker.compose.service: backend
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: short-url
+                com.docker.compose.service: backend
+                com.docker.compose.network.default: "true"
+        spec:
+            containers:
+                - name: shorturl-backend
+                  image: short-url-backend
+                  imagePullPolicy: IfNotPresent
+                  env:
+                    - name: BASE_URL
+                      value: "http://localhost:8001"
+                    - name: MONGO_URL
+                      value: "mongodb://mongo:27017/shorturl"
+                    - name: PORT
+                      value: "8001"
+                    - name: REDIS_URL
+                      value: "redis://redis:6379"
+                  ports:
+                    - name: backend-8001
+                      containerPort: 8001

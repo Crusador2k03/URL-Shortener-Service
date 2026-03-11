@@ -1,0 +1,35 @@
+#! frontend-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: frontend
+    namespace: short-url
+    labels:
+        com.docker.compose.project: short-url
+        com.docker.compose.service: frontend
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: short-url
+            com.docker.compose.service: frontend
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: short-url
+                com.docker.compose.service: frontend
+                com.docker.compose.network.default: "true"
+        spec:
+            containers:
+                - name: frontend
+                  image: short-url-frontend
+                  imagePullPolicy: IfNotPresent
+                  env:
+                    - name: VITE_API_BASE
+                      value: "http://shorturl-backend:8001"
+                  ports:
+                    - name: frontend-80
+                      containerPort: 80
